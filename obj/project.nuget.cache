@@ -1,8 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "pdcKRQ7CHKSaN/KnqYCvAK6jZl8+ZtI4EjmBppbPacMALK3sKxUVZ2onE9ncTyCJrV/bc+HF4bK+jbWD8SxCYQ==",
+  "dgSpecHash": "4ccDB4GLqURt350oWwHpq6cBo2Yu+66AjmQ2NnkDygWMGyZING9+8OrrQjPMfEw0XH86vrdcgaBebWUh3KwpqA==",
   "success": true,
   "projectFilePath": "/home/pratyaksh/Documents/Y13/Computing/BackpropServer/BackpropServer.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "/home/pratyaksh/.nuget/packages/npgsql/4.1.4/npgsql.4.1.4.nupkg.sha512",
+    "/home/pratyaksh/.nuget/packages/system.runtime.compilerservices.unsafe/4.6.0/system.runtime.compilerservices.unsafe.4.6.0.nupkg.sha512"
+  ],
   "logs": []
 }
