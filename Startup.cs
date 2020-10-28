@@ -21,6 +21,19 @@ namespace BackpropServer {
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services) {
+            // Enable CORS, allowing the website to access the API
+            services.AddCors(options => {
+                options.AddPolicy(
+                    name: "CorsPolicy",
+                    builder => {
+                        builder
+                            .AllowAnyOrigin()
+                            .AllowAnyHeader()
+                            .AllowAnyMethod();
+                    }
+                );
+            });
+
             services.AddControllers();
         }
 
@@ -31,6 +44,8 @@ namespace BackpropServer {
             }
 
             app.UseHttpsRedirection();
+
+            app.UseCors("CorsPolicy");
 
             app.UseRouting();
 

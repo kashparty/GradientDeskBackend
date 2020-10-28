@@ -19,3 +19,5 @@
 /home/pratyaksh/Documents/Y13/Computing/BackpropServer/obj/Debug/netcoreapp3.1/BackpropServer.dll
 /home/pratyaksh/Documents/Y13/Computing/BackpropServer/obj/Debug/netcoreapp3.1/BackpropServer.pdb
 /home/pratyaksh/Documents/Y13/Computing/BackpropServer/obj/Debug/netcoreapp3.1/BackpropServer.genruntimeconfig.cache
+/home/pratyaksh/Documents/Y13/Computing/BackpropServer/bin/Debug/netcoreapp3.1/Npgsql.dll
+/home/pratyaksh/Documents/Y13/Computing/BackpropServer/obj/Debug/netcoreapp3.1/BackpropServer.csproj.CopyComplete
