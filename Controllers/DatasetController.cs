@@ -115,7 +115,7 @@ namespace BackpropServer.Controllers {
                         };
                     } else {
                         return new ResponseModel {
-                            errors = new List<string>{ "DATASET_NOT_FOUND" }
+                            errors = new List<string> { "DATASET_NOT_FOUND" }
                         };
                     }
                 }
@@ -172,8 +172,8 @@ namespace BackpropServer.Controllers {
             }
         }
 
-        [HttpPost("/column")]
-        public async Task<ActionResult<ResponseModel>> CreateColumn(List<ColumnModel> newColumns) {
+        [HttpPost("columns")]
+        public async Task<ActionResult<ResponseModel>> CreateColumns(MultipleColumnsModel newColumns) {
             // Check if user is authorized
             string jwt;
             if (!Request.Headers.ContainsKey("Authorization")) {
@@ -194,13 +194,12 @@ namespace BackpropServer.Controllers {
             // Connect to database
             await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
             await conn.OpenAsync();
-
-            foreach (ColumnModel newColumnData in newColumns) {
-                await using(NpgsqlCommand cmd = new NpgsqlCommand(
+            foreach (ColumnModel newColumnData in newColumns.data) {
+                await using (NpgsqlCommand cmd = new NpgsqlCommand(
                 "INSERT INTO columns (columnid, datasetid, name, type, include)" +
                 "VALUES (@columnid, @datasetid, @name, @type, @include)", conn
                 )) {
-                    cmd.Parameters.AddWithValue(Guid.NewGuid());
+                    cmd.Parameters.AddWithValue("columnid", Guid.NewGuid());
                     cmd.Parameters.AddWithValue("datasetid", Guid.Parse(newColumnData.datasetId));
                     cmd.Parameters.AddWithValue("name", newColumnData.name);
                     cmd.Parameters.AddWithValue("type", newColumnData.type);
@@ -210,9 +209,7 @@ namespace BackpropServer.Controllers {
                 }
             }
 
-            return new ResponseModel {
-
-            };
+            return new ResponseModel { };
         }
     }
 }

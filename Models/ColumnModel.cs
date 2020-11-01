@@ -1,11 +1,14 @@
-using System;
+using System.Collections.Generic;
 
 namespace BackpropServer.Models {
     public class ColumnModel {
-        public string columnId;
-        public string datasetId;
-        public string name;
-        public string type;
-        public bool include;
+        public string datasetId { get; set; }
+        public string name { get; set; }
+        public string type { get; set; }
+        public bool include { get; set; }
+    }
+
+    public class MultipleColumnsModel {
+        public List<ColumnModel> data { get; set; }
     }
 }
