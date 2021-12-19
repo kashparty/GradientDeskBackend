@@ -6,5 +6,6 @@ namespace BackpropServer.Models {
         public string description { get; set; }
         public string filetype { get; set; }
         public string url { get; set; }
+        public bool readHeaders { get; set; }
     }
 }

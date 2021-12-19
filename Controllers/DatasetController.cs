@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -46,8 +47,8 @@ namespace BackpropServer.Controllers {
             Guid datasetId = Guid.NewGuid();
 
             await using (NpgsqlCommand cmd = new NpgsqlCommand(
-                "INSERT INTO datasets (datasetid, userid, name, description, filetype, url)" +
-                "VALUES (@datasetid, @userid, @name, @description, @filetype, @url)", conn
+                "INSERT INTO datasets (datasetid, userid, name, description, filetype, url, readheaders)" +
+                "VALUES (@datasetid, @userid, @name, @description, @filetype, @url, false)", conn
             )) {
                 cmd.Parameters.AddWithValue("datasetid", datasetId);
                 cmd.Parameters.AddWithValue("userid", Guid.Parse(payload.sub));
@@ -90,7 +91,7 @@ namespace BackpropServer.Controllers {
             await conn.OpenAsync();
 
             await using (NpgsqlCommand cmd = new NpgsqlCommand(
-                "SELECT datasets.name, datasets.description, datasets.filetype, datasets.url " +
+                "SELECT datasets.name, datasets.description, datasets.filetype, datasets.url, datasets.readheaders " +
                 "FROM datasets WHERE datasets.userid = @userid AND datasets.datasetid = @datasetid", conn
             )) {
                 cmd.Parameters.AddWithValue("userid", Guid.Parse(payload.sub));
@@ -103,6 +104,7 @@ namespace BackpropServer.Controllers {
                         string description = (string)reader.GetValue(1);
                         string filetype = (string)reader.GetValue(2);
                         string url = (string)reader.GetValue(3);
+                        bool readHeaders = (bool)reader.GetValue(4);
 
                         return new ResponseModel {
                             data = new DatasetModel {
@@ -110,7 +112,8 @@ namespace BackpropServer.Controllers {
                                 name = name,
                                 description = description,
                                 filetype = filetype,
-                                url = url
+                                url = url,
+                                readHeaders = readHeaders,
                             }
                         };
                     } else {
@@ -120,6 +123,44 @@ namespace BackpropServer.Controllers {
                     }
                 }
             }
+        }
+
+        [HttpPut]
+        public async Task<ActionResult<ResponseModel>> UpdateDataset(DatasetModel newDatasetData) {
+            // Check if user is authorized
+            string jwt;
+            if (!Request.Headers.ContainsKey("Authorization")) {
+                return new ResponseModel {
+                    errors = new List<string> { "NO_JWT" }
+                };
+            }
+
+            jwt = Request.Headers["Authorization"];
+
+            JWTPayloadModel payload;
+            if (!JWT.TryParse(jwt, out payload)) {
+                return new ResponseModel {
+                    errors = new List<string> { "JWT_INVALID" }
+                };
+            }
+
+            // Connect to database
+            await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+            await using (NpgsqlCommand cmd = new NpgsqlCommand(
+                "UPDATE datasets SET name = @name, description = @description, readheaders = @readheaders " +
+                "WHERE datasets.datasetid = @datasetid AND datasets.userid = @userid", conn
+            )) {
+                cmd.Parameters.AddWithValue("name", newDatasetData.name);
+                cmd.Parameters.AddWithValue("description", newDatasetData.description);
+                cmd.Parameters.AddWithValue("readheaders", newDatasetData.readHeaders);
+                cmd.Parameters.AddWithValue("datasetid", Guid.Parse(newDatasetData.datasetId));
+                cmd.Parameters.AddWithValue("userid", Guid.Parse(payload.sub));
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            return new ResponseModel { };
         }
 
         [HttpGet("all")]
@@ -144,7 +185,6 @@ namespace BackpropServer.Controllers {
             // Connect to database
             await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
             await conn.OpenAsync();
-
             await using (NpgsqlCommand cmd = new NpgsqlCommand(
                 "SELECT datasets.datasetid, datasets.name, datasets.description " +
                 "FROM datasets WHERE datasets.userid = @userid", conn
@@ -167,6 +207,61 @@ namespace BackpropServer.Controllers {
 
                     return new ResponseModel {
                         data = allDatasets
+                    };
+                }
+            }
+        }
+
+        [HttpGet("{datasetId}/columns")]
+        public async Task<ActionResult<ResponseModel>> GetDatasetColumns(string datasetId) {
+            // Check if user is authorized
+            string jwt;
+            if (!Request.Headers.ContainsKey("Authorization")) {
+                return new ResponseModel {
+                    errors = new List<string> { "NO_JWT" }
+                };
+            }
+
+            jwt = Request.Headers["Authorization"];
+
+            JWTPayloadModel payload;
+            if (!JWT.TryParse(jwt, out payload)) {
+                return new ResponseModel {
+                    errors = new List<string> { "JWT_INVALID" }
+                };
+            }
+
+            // Connect to database
+            await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+            await using (NpgsqlCommand cmd = new NpgsqlCommand(
+                "SELECT columns.name, columns.type, columns.include, columns.index " +
+                "FROM columns WHERE columns.datasetid = @datasetid", conn
+            )) {
+                cmd.Parameters.AddWithValue("datasetid", Guid.Parse(datasetId));
+
+                await using (NpgsqlDataReader reader = await cmd.ExecuteReaderAsync()) {
+                    List<ColumnModel> allColumns = new List<ColumnModel>();
+                    // Read all records
+                    while (await reader.ReadAsync()) {
+                        string name = (string)reader.GetValue(0);
+                        string type = (string)reader.GetValue(1);
+                        bool include = (bool)reader.GetValue(2);
+                        int index = (int)reader.GetValue(3);
+
+                        allColumns.Add(new ColumnModel {
+                            datasetId = datasetId,
+                            name = name,
+                            type = type,
+                            include = include,
+                            index = index
+                        });
+                    }
+
+                    allColumns = allColumns.OrderBy(c => c.index).ToList();
+
+                    return new ResponseModel {
+                        data = allColumns
                     };
                 }
             }
@@ -196,19 +291,105 @@ namespace BackpropServer.Controllers {
             await conn.OpenAsync();
             foreach (ColumnModel newColumnData in newColumns.data) {
                 await using (NpgsqlCommand cmd = new NpgsqlCommand(
-                "INSERT INTO columns (columnid, datasetid, name, type, include)" +
-                "VALUES (@columnid, @datasetid, @name, @type, @include)", conn
+                "INSERT INTO columns (datasetid, name, type, include, index)" +
+                "VALUES (@datasetid, @name, @type, @include, @index)", conn
                 )) {
-                    cmd.Parameters.AddWithValue("columnid", Guid.NewGuid());
                     cmd.Parameters.AddWithValue("datasetid", Guid.Parse(newColumnData.datasetId));
                     cmd.Parameters.AddWithValue("name", newColumnData.name);
                     cmd.Parameters.AddWithValue("type", newColumnData.type);
                     cmd.Parameters.AddWithValue("include", newColumnData.include);
+                    cmd.Parameters.AddWithValue("index", newColumnData.index);
 
                     await cmd.ExecuteNonQueryAsync();
                 }
             }
 
+            return new ResponseModel { };
+        }
+
+        [HttpPut("columns")]
+        public async Task<ActionResult<ResponseModel>> UpdateColumns(MultipleColumnsModel newColumns) {
+            // Check if user is authorized
+            string jwt;
+            if (!Request.Headers.ContainsKey("Authorization")) {
+                return new ResponseModel {
+                    errors = new List<string> { "NO_JWT" }
+                };
+            }
+
+            jwt = Request.Headers["Authorization"];
+
+            JWTPayloadModel payload;
+            if (!JWT.TryParse(jwt, out payload)) {
+                return new ResponseModel {
+                    errors = new List<string> { "JWT_INVALID" }
+                };
+            }
+
+            // Connect to database
+            await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+            foreach (ColumnModel newColumnData in newColumns.data) {
+                await using (NpgsqlCommand cmd = new NpgsqlCommand(
+                    "UPDATE columns SET name = @name, type = @type, include = @include " +
+                    "WHERE columns.datasetid = @datasetid AND columns.index = @index", conn
+                )) {
+                    cmd.Parameters.AddWithValue("name", newColumnData.name);
+                    cmd.Parameters.AddWithValue("type", newColumnData.type);
+                    cmd.Parameters.AddWithValue("include", newColumnData.include);
+                    cmd.Parameters.AddWithValue("datasetid", Guid.Parse(newColumnData.datasetId));
+                    cmd.Parameters.AddWithValue("index", newColumnData.index);
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            return new ResponseModel { };
+        }
+
+        [HttpDelete("{datasetId}")]
+        public async Task<ActionResult<ResponseModel>> DeleteDataset(string datasetId) {
+            // Check if user is authorized
+            string jwt;
+            if (!Request.Headers.ContainsKey("Authorization")) {
+                return new ResponseModel {
+                    errors = new List<string> { "NO_JWT" }
+                };
+            }
+
+            jwt = Request.Headers["Authorization"];
+
+            JWTPayloadModel payload;
+            if (!JWT.TryParse(jwt, out payload)) {
+                return new ResponseModel {
+                    errors = new List<string> { "JWT_INVALID" }
+                };
+            }
+
+            // Connect to database
+            await using NpgsqlConnection conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            await using (NpgsqlCommand cmd = new NpgsqlCommand(
+                "DELETE FROM columns WHERE columns.datasetid IN (SELECT datasets.datasetid FROM datasets " + 
+                "WHERE datasets.datasetid = @datasetid AND datasets.userid = @userid)", conn
+            )) {
+                cmd.Parameters.AddWithValue("datasetid", Guid.Parse(datasetId));
+                cmd.Parameters.AddWithValue("userid", Guid.Parse(payload.sub));
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await using (NpgsqlCommand cmd = new NpgsqlCommand(
+                "DELETE FROM datasets WHERE datasets.datasetid = @datasetid " + 
+                "AND datasets.userid = @userid", conn
+            )) {
+                cmd.Parameters.AddWithValue("datasetid", Guid.Parse(datasetId));
+                cmd.Parameters.AddWithValue("userid", Guid.Parse(payload.sub));
+
+                await cmd.ExecuteNonQueryAsync();
+            }
+            
             return new ResponseModel { };
         }
     }
